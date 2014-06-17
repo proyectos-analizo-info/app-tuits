@@ -1,0 +1,166 @@
+<!-- css -->
+<style type="text/css">
+/* common */
+.dispn{display:none}
+/* particular */
+.tweet{padding:9.5px;margin:0px 0px 10px;white-space:pre-wrap;background-color:#F5F5F5;border:1px solid rgba(0,0,0,0.15);border-radius:4px}
+</style>
+
+<!-- Messages for the user -->
+<div id="row" class="row">
+    <div id="messages" class="span6 offset2" style="height:35px;"> <!-- width:460px; + margin-left:180px; = 640px -->
+        <!-- Loading alert box -->
+        <div id="loading" class="alert alert-info dispn">
+            <a class="close">×</a>
+            <span>Cargando la tarea...</span>
+        </div>
+        <!-- Success alert box -->
+        <div id="success" class="alert alert-success dispn">
+            <a class="close">×</a>
+            <span><strong>Bien hecho</strong>, tu respuesta se ha guardado</span>
+        </div>
+        <!-- Finish alert box -->
+        <div id="finish" class="alert alert-success dispn">
+            <span><strong>Enhorabuena</strong>, has participado en todas las tareas disponibles</span>
+            <br/>
+            <div class="alert-actions">
+                <a class="btn small" href="/">Volver</a>
+                <a class="btn small" href="/app">o, ver otras aplicaciones</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--
+Task DOM for loading the needed information.
+It uses the class="skeleton" to identify the elements that belong to the task.
+-->
+
+<!-- Items for the user -->
+<div id="skeleton" class="row skeleton"> <!-- 460px + 380px = 840px -->
+    <!-- Left -->
+    <div id="left" class="span6"> <!-- width:460px; -->
+        <!-- Question 1 -->
+        <div id="step1">
+            <h1 id="question1">¿Se refiere el tweet directamente a la ciudadanía, los ciudadanos o ciudadanas?</h1>
+            <div id="answer1">
+                <button class="btn btn-success btn-answer" value="step2"><i class="icon icon-white icon-thumbs-up"></i> Sí</button>
+                <button class="btn btn-danger btn-answer" value="No"><i class="icon icon-white icon-thumbs-down"></i> No</button>
+                <button class="btn btn-answer" value="NotKnown"><i class="icon icon-white icon-question-sign"></i> No lo sé</button>
+            </div>
+        </div>
+        <!-- Question 2 -->
+        <div id="step2" class="dispn">
+            <h1 id="question2">¿El diputado o diputada se refiere a la ciudadanía en primera o en tercera persona?</h1>
+            <div id="answer2">
+                <button class="btn btn-success btn-answer" value="Primera">Primera</button>
+                <button class="btn btn-success btn-answer" value="Tercera">Tercera</button>
+            </div>
+        </div>
+        <!-- Feedback -->
+        <div id="feedback" style="margin-top:10px;">
+            <p>Estas trabajando en la tarea: <span id="task-id" class="label label-warning">#</span></p>
+            <p>Has completado: <span id="done" class="label label-info">#</span> tareas de <span id="total" class="label label-inverse">#</span></p>
+        </div>
+        <!-- Progress bar -->
+        <div id="progress_bar">
+            <div class="progress progress-striped" style="margin-bottom:10px;">
+                <div id="progress" rel="tooltip" title="#" class="bar" style="width:0%;"></div>
+            </div>
+        </div>
+    </div>
+    <!-- Right -->
+    <div id="right" class="span5" style="margin-top:10px;"> <!-- width:380px; -->
+        <p id="task-user"></p>
+        <p id="task-date"></p>
+        <p id="task-tweet" class="tweet"></p>
+    </div>
+</div>
+
+<!-- code -->
+<script type="text/javascript">
+$(document).ready(function() {
+
+    var app_short_name = "app_short_name";
+
+    // When the task is loaded, do...
+    pybossa.taskLoaded(function(task, deferred) {
+        if (!$.isEmptyObject(task)) {
+            var task_user = $("<span/>");
+            var task_date = $("<span/>");
+            var task_tweet = $("<span/>");
+            task_user.html("<strong>Usuario:</strong> <a title='" + task.info.user + "' href ='" + task.info.url + "' target='_blank'>" + task.info.user + "</a>");
+            task_date.html("<strong>Fecha:</strong> " + task.info.date);
+            task_tweet.html(task.info.tweet);
+            task.task_user = task_user;
+            task.task_date = task_date;
+            task.task_tweet = task_tweet;
+        }
+        deferred.resolve(task);
+    });
+
+    /*
+    Present the current task to the user.
+    Load the task data into the HTML DOM.
+    */
+
+    function loadUserProgress(task_id) {
+        pybossa.userProgress(app_short_name).done(function(data) {
+            $("#task-id").html(task_id);
+            $("#done").text(data.done);
+            $("#total").text(data.total);
+            var p = Math.round((data.done * 100) / data.total);
+            $("#progress").css("width", p.toString() + "%");
+            $("#progress").attr("title", p.toString() + "% completado");
+            $("#progress").tooltip({"placement":"left"});
+        });
+    }
+
+    pybossa.presentTask(function(task, deferred) {
+        if (!$.isEmptyObject(task)) {
+            $("#loading").fadeIn(1000);
+            loadUserProgress(task.id);
+            $("#step2").hide();
+            $("#step1").show();
+            $("#task-user").html(task.task_user);
+            $("#task-date").html(task.task_date);
+            $("#task-tweet").html(task.task_tweet);
+            $(".btn-answer").off("click").on("click", function(e) {
+                var answer = $(e.target).attr("value");
+                if (answer == "step2") {
+                    $("#step1").toggle();
+                    $("#step2").toggle();
+                } else {
+                    if (confirm("Necesitamos que confirmes el envío de tu análisis, por favor.")) {
+                        pybossa.saveTask(task.id, answer).done(function() {
+                            $.when(deferred.resolve()).done(function() {
+                                $("#loading").hide();
+                                $("#success").fadeIn(1000);
+                                $("#right").hide();
+                                setTimeout(function() {
+                                    $("#success").fadeOut(1000);
+                                    $("#right").fadeIn(1000);
+                                }, 1500);
+                            });
+                        });
+                    } else {
+                        if (answer == "Primera" || answer == "Tercera") {
+                            $("#step2").hide();
+                            $("#step1").show();
+                        }
+                    }
+                }
+            });
+            $("#loading").fadeOut(1000);
+        } else {
+            $(".skeleton").fadeOut(1000);
+            setTimeout(function() {
+                $("#success").hide();
+                $("#finish").fadeIn(1000);
+            }, 1500);
+        }
+    });
+
+    pybossa.run(app_short_name);
+});
+</script>
